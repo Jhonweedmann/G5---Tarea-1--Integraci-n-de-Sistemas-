@@ -1,0 +1,39 @@
+services:
+  cupos:
+    build:
+      context: .
+      dockerfile: cupos/Dockerfile
+    environment:
+      CUPOS_DB: /data/cupos.db
+    volumes:
+      - cupos_data:/data
+    ports:
+      - "50051:50051"
+
+  matriculas:
+    build:
+      context: .
+      dockerfile: matriculas/Dockerfile
+    environment:
+      MATRICULAS_DB: /data/matriculas.db
+      CUPOS_GRPC_TARGET: cupos:50051
+      GRPC_TIMEOUT_SECONDS: "2"
+      API_TOKEN: desarrollo-seguro
+      CACHE_TTL_SECONDS: "30"
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - matriculas_data:/data
+    ports:
+      - "8000:8000"
+    depends_on:
+      - cupos
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+volumes:
+  cupos_data:
+  matriculas_data:

@@ -1,0 +1,4 @@
+-r cupos/requirements.txt
+-r matriculas/requirements.txt
+PyYAML==6.0.3
+reportlab==4.4.10

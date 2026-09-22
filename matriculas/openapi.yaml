@@ -1,0 +1,48 @@
+openapi: 3.0.3
+info:
+  title: Servicio de Matrículas
+  version: 1.0.0
+paths:
+  /v1/estudiantes:
+    get: {summary: Lista estudiantes, responses: {'200': {description: OK}}}
+    post:
+      summary: Crea un estudiante
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/EstudianteEntrada'}}}}
+      responses: {'201': {description: Creado}, '401': {$ref: '#/components/responses/Problema'}}
+  /v1/estudiantes/{estudiante_id}:
+    get: {summary: Consulta un estudiante, parameters: [{name: estudiante_id, in: path, required: true, schema: {type: string}}], responses: {'200': {description: OK}, '404': {$ref: '#/components/responses/Problema'}}}
+  /v1/cursos/{curso_id}:
+    get: {summary: Consulta disponibilidad mediante Cupos, parameters: [{name: curso_id, in: path, required: true, schema: {type: string}}], responses: {'200': {description: OK}, '503': {$ref: '#/components/responses/Problema'}, '504': {$ref: '#/components/responses/Problema'}}}
+  /v1/matriculas:
+    get: {summary: Lista matrículas, responses: {'200': {description: OK}}
+    }
+    post:
+      summary: Crea matrícula y ocupa un cupo
+      parameters: [{name: Idempotency-Key, in: header, schema: {type: string}}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/MatriculaEntrada'}}}}
+      responses: {'201': {description: Creada}, '409': {$ref: '#/components/responses/Problema'}, '503': {$ref: '#/components/responses/Problema'}}
+  /v1/matriculas/{matricula_id}:
+    get: {summary: Consulta una matrícula, parameters: [{name: matricula_id, in: path, required: true, schema: {type: string}}], responses: {'200': {description: OK}}}
+  /v1/matriculas/{matricula_id}/revertir:
+    post: {summary: Revierte una matrícula y libera cupo, parameters: [{name: matricula_id, in: path, required: true, schema: {type: string}}], responses: {'200': {description: OK}, '409': {$ref: '#/components/responses/Problema'}}}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer}
+  responses:
+    Problema:
+      description: Error RFC 9457 (Problem Details)
+      content: {application/problem+json: {schema: {$ref: '#/components/schemas/Problema'}}}
+  schemas:
+    EstudianteEntrada:
+      type: object
+      required: [nombre, email]
+      properties: {nombre: {type: string}, email: {type: string, format: email}}
+    MatriculaEntrada:
+      type: object
+      required: [estudiante_id, curso_id]
+      properties: {estudiante_id: {type: string}, curso_id: {type: string}}
+    Problema:
+      type: object
+      required: [type, title, status, detail]
+      properties: {type: {type: string}, title: {type: string}, status: {type: integer}, detail: {type: string}}
+security: [{bearerAuth: []}]
