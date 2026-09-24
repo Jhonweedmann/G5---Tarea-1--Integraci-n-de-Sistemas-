@@ -1,4 +1,3 @@
----
 
 **Forma K — Sistema de Gestión de Cursos y Matrículas**
 **Informe de Unidad 1 · Integración de Sistemas**
@@ -14,7 +13,6 @@ Docente: Gonzalo Pérez Correa
 
 **Fecha:** [completar]
 
----
 
 # Informe — Forma K: Cursos y Matrículas
 
