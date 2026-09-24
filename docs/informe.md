@@ -4,14 +4,12 @@
 Universidad de Concepción — Facultad de Ingeniería
 Docente: Gonzalo Pérez Correa
 
-**Grupo:** [completar]
+**Grupo:05** 
 **Integrantes:**
-- [Nombre completo integrante 1]
-- [Nombre completo integrante 2]
-- [Nombre completo integrante 3]
-- [Nombre completo integrante 4 — si aplica]
-
-**Fecha:** [completar]
+- Alan Ibacache
+- Benjamín Jímenez
+- Benjamín Villarroel
+**Fecha:25/09/2026** 
 
 
 # Informe — Forma K: Cursos y Matrículas
