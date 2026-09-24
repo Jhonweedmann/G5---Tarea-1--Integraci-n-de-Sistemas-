@@ -1,6 +1,5 @@
+# Informe — Forma K: Cursos y Matrículas
 
-**Forma K — Sistema de Gestión de Cursos y Matrículas**
-**Informe de Unidad 1 · Integración de Sistemas**
 Universidad de Concepción — Facultad de Ingeniería
 Docente: Gonzalo Pérez Correa
 
@@ -10,9 +9,6 @@ Docente: Gonzalo Pérez Correa
 - Benjamín Jímenez
 - Benjamín Villarroel
 **Fecha:25/09/2026** 
-
-
-# Informe — Forma K: Cursos y Matrículas
 
 ## 1. Problema y solución
 
