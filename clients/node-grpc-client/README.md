@@ -1,15 +1,4 @@
 # Cliente gRPC en Node.js — Servicio Cupos (O5)
-
-Segundo cliente gRPC, en un lenguaje distinto a Python, para el requisito opcional **O5**:
-
-> *"Un cliente del servicio de Catálogo en otro lenguaje (por ejemplo .NET), para evidenciar la interoperabilidad."*
-
-## Qué demuestra
-
-El sistema en producción solo tiene un cliente gRPC: `matriculas/app/grpc_client.py`, escrito en Python, que usa código generado con `protoc` (`cupos_pb2.py` / `cupos_pb2_grpc.py`). Este cliente en Node.js **no se integra al sistema ni lo reemplaza** — es una prueba independiente de que el contrato `cupos.proto` puede ser consumido por cualquier lenguaje con soporte gRPC, sin cambiar una sola línea del servidor de Cupos.
-
-Además, usa una estrategia distinta a la de Python: en vez de generar código con `protoc` antes de compilar, carga el `.proto` **directamente en tiempo de ejecución** con `@grpc/proto-loader`. Esto muestra otra forma válida (y muy común en Node.js) de trabajar con un contrato Protobuf/gRPC, sin paso de compilación previo.
-
 ## Requisitos
 
 - Node.js 18 o superior
