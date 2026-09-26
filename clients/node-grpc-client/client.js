@@ -15,19 +15,17 @@
  * evidencia de interoperabilidad: ni siquiera hace falta generar código
  * para hablar con el mismo servicio.
  *
- * Uso:
- *   npm install
- *   node client.js [host:puerto]
+ * Uso (dentro de la red de docker-compose, porque Cupos no publica su puerto):
+ *   docker compose --profile demo run --rm cupos-node-client
  *
- * Por defecto apunta a localhost:50051 (o al servicio "cupos" si se corre
- * dentro de la red de docker-compose, pasando "cupos:50051" como argumento).
+ * Lee el mismo contrato que el servidor (cupos/cupos.proto); no hay copia local.
  */
 
 const path = require("path");
 const grpc = require("@grpc/grpc-js");
 const protoLoader = require("@grpc/proto-loader");
 
-const PROTO_PATH = path.join(__dirname, "cupos.proto");
+const PROTO_PATH = process.env.PROTO_PATH || path.join(__dirname, "..", "..", "cupos", "cupos.proto");
 const TARGET = process.argv[2] || process.env.CUPOS_GRPC_TARGET || "localhost:50051";
 
 function crearCliente() {

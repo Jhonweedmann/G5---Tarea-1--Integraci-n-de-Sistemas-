@@ -1,0 +1,12 @@
+Python 3.14.2 · 10 series de 10000 operaciones
+
+Parte 1: un Curso
+  protobuf: 39 bytes; 542 ns/op ± 82
+  json    : 94 bytes; 5171 ns/op ± 1225
+
+Parte 2: n cursos, sin y con gzip (bytes)
+      n |  protobuf |      json | proto/json |  pb+gzip | json+gzip | gz: pb/json
+      1 |        34 |        92 |       0.37 |       52 |        97 |        0.54
+     10 |       358 |       911 |       0.39 |      128 |       176 |        0.73
+    100 |      3684 |      9261 |       0.40 |      654 |       766 |        0.85
+   1000 |     37840 |     93641 |       0.40 |     6129 |      7521 |        0.81

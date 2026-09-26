@@ -3,7 +3,10 @@ import unittest
 
 import yaml
 
-from cupos.app import cupos_pb2
+from scripts.generar_stubs import generar
+
+generar()
+from cupos.app import cupos_pb2  # noqa: E402
 
 
 ROOT = Path(__file__).parents[1]
@@ -22,5 +25,5 @@ class ContractTests(unittest.TestCase):
         contract = yaml.safe_load((ROOT / "matriculas" / "openapi.yaml").read_text(encoding="utf-8"))
         self.assertIn("bearerAuth", contract["components"]["securitySchemes"])
         self.assertIn("/v1/matriculas", contract["paths"])
-        self.assertIn("Problema", contract["components"]["responses"])
-        self.assertEqual(contract["components"]["responses"]["Problema"]["content"].keys(), {"application/problem+json"})
+        for nombre, respuesta in contract["components"]["responses"].items():
+            self.assertEqual(respuesta["content"].keys(), {"application/problem+json"}, nombre)

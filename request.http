@@ -1,0 +1,255 @@
+# Pruebas manuales de la API de Matrículas con la extensión REST Client de VS Code.
+# Requisito: el sistema levantado con `docker compose up`.
+# Cada petición se ejecuta con "Send Request" (o Ctrl+Alt+R). Ejecutar en orden dentro de cada
+# sección: varias usan el id que devolvió una petición anterior.
+# Los correos llevan {{$timestamp}} para poder repetir el archivo sin chocar con "Correo duplicado".
+# Los cupos sí se gastan entre ejecuciones (ARQ-101 tiene 2, API-201 1, DAT-110 3). Para partir de
+# cero: `docker compose down -v` y `docker compose up`.
+
+@base = http://localhost:8000
+@token = desarrollo-seguro
+@tokenLectura = solo-lectura
+
+
+# ======================================================================
+# 1. Sistema y contrato
+# ======================================================================
+
+### Salud del servicio (público, sin token) -> 200
+GET {{base}}/health
+
+### Contrato OpenAPI publicado (el mismo matriculas/openapi.yaml) -> 200
+GET {{base}}/openapi.yaml
+
+
+# ======================================================================
+# 2. Recorrido normal
+#    socio = estudiante · préstamo = matrícula · devolución = revertir
+# ======================================================================
+
+### 2.1 Registrar estudiante Ana -> 201 con cabecera Location
+# @name crearAna
+POST {{base}}/v1/estudiantes
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "nombre": "Ana Perez",
+  "email": "ana.{{$timestamp}}@example.com"
+}
+
+### 2.2 Consultar el estudiante creado -> 200
+GET {{base}}/v1/estudiantes/{{crearAna.response.body.$.id}}
+Authorization: Bearer {{token}}
+
+### 2.3 Consultar el curso API-201 (viaja a Cupos por gRPC) -> 200, cupos_disponibles: 1
+GET {{base}}/v1/cursos/API-201
+Authorization: Bearer {{token}}
+
+### 2.4 Matricular a Ana en API-201 con Idempotency-Key -> 201, _links incluye "revertir"
+# @name matricularAna
+POST {{base}}/v1/matriculas
+Authorization: Bearer {{token}}
+Content-Type: application/json
+Idempotency-Key: {{$guid}}
+
+{
+  "estudiante_id": "{{crearAna.response.body.$.id}}",
+  "curso_id": "API-201"
+}
+
+### 2.5 Reintento con la MISMA clave -> 200, misma matrícula, Idempotent-Replay: true (no ocupa otro cupo)
+POST {{base}}/v1/matriculas
+Authorization: Bearer {{token}}
+Content-Type: application/json
+Idempotency-Key: {{matricularAna.request.headers.Idempotency-Key}}
+
+{
+  "estudiante_id": "{{crearAna.response.body.$.id}}",
+  "curso_id": "API-201"
+}
+
+### 2.6 Misma matrícula SIN clave -> 409 "Matrícula duplicada"
+POST {{base}}/v1/matriculas
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "estudiante_id": "{{crearAna.response.body.$.id}}",
+  "curso_id": "API-201"
+}
+
+### 2.7 Registrar estudiante Beto -> 201
+# @name crearBeto
+POST {{base}}/v1/estudiantes
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "nombre": "Beto Soto",
+  "email": "beto.{{$timestamp}}@example.com"
+}
+
+### 2.8 Matricular a Beto en API-201, ya sin cupos -> 409 "No hay cupos disponibles"
+POST {{base}}/v1/matriculas
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "estudiante_id": "{{crearBeto.response.body.$.id}}",
+  "curso_id": "API-201"
+}
+
+### 2.9 Revertir la matrícula de Ana -> 200, estado "revertida", sin enlace "revertir"
+POST {{base}}/v1/matriculas/{{matricularAna.response.body.$.id}}/revertir
+Authorization: Bearer {{token}}
+
+### 2.10 Revertirla otra vez -> 409 "Matrícula ya revertida"
+POST {{base}}/v1/matriculas/{{matricularAna.response.body.$.id}}/revertir
+Authorization: Bearer {{token}}
+
+### 2.11 El cupo volvió -> 200, cupos_disponibles: 1
+GET {{base}}/v1/cursos/API-201
+Authorization: Bearer {{token}}
+
+### 2.12 Listado paginado -> 200 con items, total, limit, offset
+GET {{base}}/v1/matriculas?limit=5&offset=0
+Authorization: Bearer {{token}}
+
+
+# ======================================================================
+# 3. Autenticación y errores
+# ======================================================================
+
+### 3.1 Sin token -> 401 con WWW-Authenticate: Bearer
+GET {{base}}/v1/estudiantes
+
+### 3.2 Token inválido -> 401 con error="invalid_token"
+GET {{base}}/v1/estudiantes
+Authorization: Bearer inventado
+
+### 3.3 Token de solo lectura haciendo GET -> 200
+GET {{base}}/v1/estudiantes
+Authorization: Bearer {{tokenLectura}}
+
+### 3.4 Token de solo lectura haciendo POST -> 403
+POST {{base}}/v1/estudiantes
+Authorization: Bearer {{tokenLectura}}
+Content-Type: application/json
+
+{
+  "nombre": "Otro",
+  "email": "otro.{{$timestamp}}@example.com"
+}
+
+### 3.5 Cuerpo inválido -> 422 problem+json con lista "errors"
+POST {{base}}/v1/estudiantes
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "nombre": "A"
+}
+
+### 3.6 Ruta inexistente -> 404 problem+json
+GET {{base}}/v1/no-existe
+Authorization: Bearer {{token}}
+
+
+# ======================================================================
+# 4. Falla de Cupos (T7)
+#    a) Ejecutar 4.1 con todo arriba.
+#    b) En Docker Desktop, DETENER el contenedor cupos (botón Stop).
+#    c) Ejecutar 4.2 a 4.7 de inmediato: los primeros ~20 s responden 504 en ~2000 ms
+#       (deadline gRPC); después, 503 en milisegundos. Repetir 4.4 para ver el cambio.
+#    d) Variante "Cupos colgado": en vez de Stop, usar Pause en Docker Desktop.
+#       Responde 504 (~2000 ms) todo el tiempo, sin pasar a 503.
+#    e) Volver a iniciar cupos (Start / Unpause) y ejecutar 4.8.
+#    Si se prueban ambas variantes, hacer las dos antes de 4.8: después de 4.8 Beto ya tiene
+#    matrícula activa en ARQ-101 y 4.5 respondería 409 sin llegar a consultar a Cupos.
+# ======================================================================
+
+### 4.1 (con Cupos ARRIBA) Matrícula activa para intentar revertirla durante la falla -> 201
+# @name matriculaParaFalla
+POST {{base}}/v1/matriculas
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "estudiante_id": "{{crearAna.response.body.$.id}}",
+  "curso_id": "ARQ-101"
+}
+
+### 4.2 No depende de Cupos -> 200 (la falla queda aislada)
+GET {{base}}/v1/estudiantes
+Authorization: Bearer {{token}}
+
+### 4.3 No depende de Cupos -> 200
+GET {{base}}/v1/matriculas/{{matriculaParaFalla.response.body.$.id}}
+Authorization: Bearer {{token}}
+
+### 4.4 Consulta a Cupos (curso inexistente: no se cachea) -> 504 (~2000 ms), luego 503 (ms)
+GET {{base}}/v1/cursos/NO-EXISTE
+Authorization: Bearer {{token}}
+
+### 4.5 Matricular a Beto en ARQ-101 -> 504 / 503; NO se matricula a ciegas
+POST {{base}}/v1/matriculas
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "estudiante_id": "{{crearBeto.response.body.$.id}}",
+  "curso_id": "ARQ-101"
+}
+
+### 4.6 Revertir durante la falla -> 504 / 503
+POST {{base}}/v1/matriculas/{{matriculaParaFalla.response.body.$.id}}/revertir
+Authorization: Bearer {{token}}
+
+### 4.7 La matrícula sigue "activa": el revertir fallido se deshizo -> 200
+GET {{base}}/v1/matriculas/{{matriculaParaFalla.response.body.$.id}}
+Authorization: Bearer {{token}}
+
+### 4.8 (con Cupos de VUELTA, ~5 s después) La misma matrícula de Beto -> 201
+POST {{base}}/v1/matriculas
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "estudiante_id": "{{crearBeto.response.body.$.id}}",
+  "curso_id": "ARQ-101"
+}
+
+
+# ======================================================================
+# 5. Falla de Redis
+#    Detener el contenedor redis en Docker Desktop y ejecutar 5.1 a 5.3.
+#    La primera petición tarda ~8 s (resolver el nombre de un contenedor detenido);
+#    luego Matrículas deja de intentar Redis por 15 s y responde en milisegundos.
+#    Al terminar, volver a iniciar redis.
+# ======================================================================
+
+### 5.1 Consulta de curso sin caché -> 200 (se consulta directo a Cupos)
+GET {{base}}/v1/cursos/DAT-110
+Authorization: Bearer {{token}}
+
+### 5.2 Matrícula CON Idempotency-Key -> 503 "Idempotencia no disponible" (no ocupa cupo)
+POST {{base}}/v1/matriculas
+Authorization: Bearer {{token}}
+Content-Type: application/json
+Idempotency-Key: {{$guid}}
+
+{
+  "estudiante_id": "{{crearBeto.response.body.$.id}}",
+  "curso_id": "DAT-110"
+}
+
+### 5.3 Matrícula SIN clave -> 201 (se procesa igual)
+POST {{base}}/v1/matriculas
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "estudiante_id": "{{crearBeto.response.body.$.id}}",
+  "curso_id": "DAT-110"
+}

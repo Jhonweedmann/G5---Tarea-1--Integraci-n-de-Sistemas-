@@ -1,10 +1,11 @@
 import tempfile
 import unittest
 
-import grpc
+from scripts.generar_stubs import generar
 
-from cupos.app import cupos_pb2
-from cupos.app.server import CuposService
+generar()
+from cupos.app import cupos_pb2  # noqa: E402
+from cupos.app.server import CuposService  # noqa: E402
 
 
 class Context:

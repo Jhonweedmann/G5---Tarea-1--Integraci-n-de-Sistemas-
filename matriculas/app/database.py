@@ -13,9 +13,8 @@ def connect(path: str) -> sqlite3.Connection:
             estado TEXT NOT NULL CHECK(estado IN ('activa', 'revertida')),
             creada_en TEXT NOT NULL, FOREIGN KEY(estudiante_id) REFERENCES estudiantes(id)
         );
-        CREATE TABLE IF NOT EXISTS idempotencia (
-            clave TEXT PRIMARY KEY, respuesta TEXT NOT NULL, expira_en INTEGER NOT NULL
-        );"""
+        CREATE UNIQUE INDEX IF NOT EXISTS una_matricula_activa_por_curso
+            ON matriculas(estudiante_id, curso_id) WHERE estado = 'activa';"""
     )
     db.commit()
     return db

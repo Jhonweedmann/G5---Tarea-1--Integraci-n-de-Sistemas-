@@ -1,27 +1,44 @@
-# ADR-005 · Autenticación Bearer en la API REST
+# ADR-005 · Autenticación y autorización en la API REST
 
 **Estado:** aceptada
 
 ## Contexto
 
-La API REST de Matrículas es consumida por personal de AprendeMás y un eventual portal web. Se necesita un mecanismo que identifique al llamador, sea sencillo de implementar en cualquier cliente HTTP, y que se defienda fácilmente en el contrato OpenAPI.
+La API expone datos personales de estudiantes y operaciones que ocupan cupos. La consumen el personal de AprendeMás y un futuro portal web. Hay que saber quién llama (autenticación) y distinguir al menos entre quien solo consulta y quien matricula (autorización), declarándolo en el contrato OpenAPI.
 
 ## Alternativas consideradas
 
-- **Basic Auth**: fácil de implementar, pero envía credenciales codificadas en base64 en cada solicitud; inadecuado cuando el tráfico no termina en TLS mutuo y expone el token en logs y proxies intermedios.
-- **API Key en query string o header personalizado**: simple, pero la clave queda expuesta en URLs (logs de proxy, historial de navegador) y no se integra de forma natural con el ecosistema estándar de OAuth2/OpenAPI.
-- **Bearer Token**: el cliente envía un token previamente acordado en el header `Authorization: Bearer <token>`; no hay credenciales en cada petición, el token puede ser efímero, y OpenAPI lo soporta de forma nativa con `securitySchemes`.
+- **Basic Auth:** estándar y simple, pero viaja un usuario y contraseña en cada petición y exige un almacén de contraseñas que el sistema no tiene.
+- **API Key en un header propio (por ejemplo `X-API-Key`):** igual de simple, pero no es un esquema HTTP estándar y no tiene una forma definida de indicar en la respuesta por qué se rechazó la credencial.
+- **JWT firmado:** lleva identidad, roles y expiración, y se verifica sin consultar a nadie. Exige gestionar claves y emisión de tokens, y revocarlo antes de que expire es difícil. Excede lo que el sistema necesita hoy.
+- **Bearer con tokens opacos por rol:** esquema estándar (RFC 6750) que OpenAPI declara de forma nativa. El servidor compara el token contra los configurados.
 
-## Decisión y justificación
+## Decisión
 
-Se elige **Bearer Token** con API Key estática para desarrollo (`desarrollo-seguro`) y tokens rotables en producción. Se declara en el contrato OpenAPI como `securitySchemes: bearerAuth` de tipo `http` con esquema `bearer`, y se aplica a todas las rutas mediante `security: [{bearerAuth: []}]`, con excepción de `/health`, `/docs` y `/openapi.json`. El middleware en `main.py` valida el header `Authorization` antes de enrutar cualquier petición a los recursos de estudiantes o matrículas.
+`Authorization: Bearer <token>` con dos tokens opacos configurados por variables de entorno:
 
-Justificaciones concretas:
-1. **Estándar HTTP**: es el esquema definido por RFC 6750 y soportado nativamente por OpenAPI 3.0, lo que permite que herramientas (Swagger UI, Postman, curl) lo consuman sin configuración adicional.
-2. **Sin credenciales por petición**: a diferencia de Basic Auth, el token no expone información sensible en cada llamada; si se filtra, puede revocarse sin cambiar la contraseña del usuario.
-3. **Evolución futura**: un token Bearer puede migrarse fácilmente a un JWT con claims o a OAuth2 sin cambiar la estructura del header, manteniendo compatibilidad con el contrato vigente.
-4. **Alineación con T3**: el mecanismo está declarado explícitamente en `openapi.yaml`, cumpliendo el requisito de contrato explícito.
+| Token | Variable | Permite |
+|---|---|---|
+| Escritura | `API_TOKEN` | Todas las operaciones |
+| Lectura | `API_TOKEN_LECTURA` | Solo `GET` |
 
-## Costo aceptado y consecuencias
+Semántica de los códigos:
 
-Para desarrollo se usa un token fijo; en producción debe reemplazarse por tokens firmados y de vida corta. El middleware añade una rama de evaluación por petición, pero el costo es despreciable. Si un cliente omite o invalida el token, recibe 401 o 403 con `application/problem+json`, consistente con el resto de la API.
+- **401** con `WWW-Authenticate: Bearer`: falta el token o es desconocido, es decir, no se sabe quién llama. Si el token es desconocido, la cabecera agrega `error="invalid_token"`.
+- **403**: el token es válido pero no alcanza para la operación, por ejemplo el token de lectura intentando un `POST`.
+
+Los tokens se comparan en tiempo constante (`hmac.compare_digest`). `/health`, `/docs` y el contrato quedan públicos.
+
+## Justificación
+
+Siendo honestos, un token opaco fijo funciona como una API Key: identifica a un tipo de cliente, no a una persona, y no expira solo. Se prefirió enviarlo como Bearer y no en un header propio porque es el esquema estándar que Swagger UI, curl y Postman entienden sin configuración. Además, RFC 6750 define cómo responder el 401 (`WWW-Authenticate` con `error="invalid_token"`), y el cliente no cambia si mañana el token pasa a ser un JWT. Con dos roles, el 403 tiene un caso real en vez de ser un código declarado que nunca ocurre.
+
+## Costo aceptado
+
+- Los tokens son secretos compartidos, no personales: no permiten auditar qué persona hizo cada matrícula.
+- Si un token se filtra, hay que rotarlo para todos sus usuarios.
+- Sin TLS delante de la API, el token viaja en claro. En producción es obligatorio terminar TLS antes de Matrículas.
+
+## Consecuencias
+
+Una versión de producción reemplazaría los tokens fijos por JWT de vida corta emitidos por un proveedor de identidad, con el rol como claim. El contrato OpenAPI no cambiaría, porque sigue siendo `bearerAuth`.

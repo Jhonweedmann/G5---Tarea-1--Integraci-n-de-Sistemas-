@@ -7,8 +7,7 @@ services:
       CUPOS_DB: /data/cupos.db
     volumes:
       - cupos_data:/data
-    ports:
-      - "50051:50051"
+    # Sin "ports": Cupos solo es alcanzable dentro de la red de Compose.
 
   matriculas:
     build:
@@ -19,6 +18,7 @@ services:
       CUPOS_GRPC_TARGET: cupos:50051
       GRPC_TIMEOUT_SECONDS: "2"
       API_TOKEN: desarrollo-seguro
+      API_TOKEN_LECTURA: solo-lectura
       CACHE_TTL_SECONDS: "30"
       REDIS_URL: redis://redis:6379/0
     volumes:
@@ -31,8 +31,14 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+
+  cupos-node-client:
+    build:
+      context: .
+      dockerfile: clients/node-grpc-client/Dockerfile
+    profiles: ["demo"]
+    depends_on:
+      - cupos
 
 volumes:
   cupos_data:

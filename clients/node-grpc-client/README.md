@@ -1,17 +1,14 @@
 # Cliente gRPC en Node.js — Servicio Cupos (O5)
-## Requisitos
-
-- Node.js 18 o superior
-- El servicio Cupos corriendo y accesible (localmente en `localhost:50051`, o `cupos:50051` si se ejecuta dentro de la red de `docker-compose`)
-
 ## Cómo ejecutarlo
 
+Cupos es un servicio interno: `docker-compose.yml` no publica su puerto hacia el host. Por eso el cliente corre como un contenedor más dentro de la red de Compose, en el perfil `demo` (no se levanta con un `docker compose up` normal):
+
 ```bash
-cd clients/node-grpc-client
-npm install
-node client.js                 # usa localhost:50051 por defecto
-node client.js cupos:50051     # o el host:puerto que corresponda
+docker compose up -d --build
+docker compose --profile demo run --rm cupos-node-client
 ```
+
+El cliente lee el mismo contrato que el servidor, `cupos/cupos.proto`. No mantiene una copia propia del `.proto`.
 
 ## Qué hace el script
 

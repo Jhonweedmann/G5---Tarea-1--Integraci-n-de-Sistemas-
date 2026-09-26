@@ -3,3 +3,6 @@ __pycache__/
 *.db
 .pytest_cache/
 .venv/
+node_modules/
+*_pb2.py
+*_pb2_grpc.py
